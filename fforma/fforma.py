@@ -175,6 +175,15 @@ class FFORMA:
         else:
             assert holdout_feats is not None, "when passing feats you must provide holdout feats"
 
+        # Drop 'unique_id' column in holdout_feats and feats
+        if 'unique_id' in holdout_feats.columns:
+            holdout_feats = holdout_feats.drop(columns=['unique_id'])
+            print(f"🔍 DEBUG: Dropped 'unique_id' from holdout_feats")
+        if 'unique_id' in feats.columns:
+            feats = feats.drop(columns=['unique_id'])
+            print(f"🔍 DEBUG: Dropped 'unique_id' from feats")
+
+
         self.lgb = self._train(holdout_feats, best_models)
 
         raw_score_ = self.lgb.predict(feats, raw_score=True)
