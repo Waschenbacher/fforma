@@ -17,8 +17,8 @@ from fforma.meta_model import (
     calc_errors,
     get_prediction_panel
 )
-from ESRNN.utils_evaluation import Naive2
-from ESRNN.m4_data import prepare_m4_data, seas_dict
+from esrnn_Di.esrnn_utils_evaluation import Naive2
+from esrnn_Di.esrnn_m4_data import prepare_m4_data, seas_dict
 from tsfeatures import tsfeatures
 
 

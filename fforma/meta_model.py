@@ -12,7 +12,7 @@ from itertools import product
 from copy import deepcopy
 
 from sklearn.utils.validation import check_is_fitted
-from ESRNN.utils_evaluation import smape, mase, evaluate_panel
+from esrnn_Di.esrnn_utils_evaluation import smape, mase, evaluate_panel
 
 
 class MetaModels:
