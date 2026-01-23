@@ -1,0 +1,41 @@
+name: fforma-Di
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - cycler
+  - cython
+  - dask
+  - joblib
+  - kiwisolver
+  - lightgbm
+  - llvmlite
+  - matplotlib
+  - more-itertools
+  - numba
+  - numpy
+  - pandas
+  - patsy
+  - pyparsing
+  - python-dateutil
+  - pytz
+  - scikit-learn
+  - scipy
+  - six
+  - statsmodels
+  - tqdm
+  - rpy2
+  - pip
+  - pip:
+    - future
+    - property-cached
+    - statsforecast
+    - supersmoother
+    - threadpoolctl
+    - arch
+    - ESRNN
+    - rstl
+    - stldecompose
+    # Git-based dependencies that need to be installed via pip
+    - git+https://github.com/FedericoGarza/tsfeatures
