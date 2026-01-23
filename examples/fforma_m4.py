@@ -3,18 +3,17 @@
 import pandas as pd
 
 from fforma import FFORMA
-from fforma.r_models import (
-    ETS,
-    ThetaF,
-    Naive,
-    SeasonalNaive
-)
-from fforma.meta_model import (
+from statsforecast.models import (
+    AutoETS, OptimizedTheta,
+    Naive as StatsForecastNaive,
+    SeasonalNaive as StatsForecastSeasonalNaive,
+    )
+
+from fforma.meta_model_statsforecast import (
     MetaModels,
     temp_holdout,
     calc_errors,
 )
-from esrnn_Di.esrnn_utils_evaluation import Naive2
 from esrnn_Di.esrnn_m4_data import prepare_m4_data, seas_dict
 from tsfeatures import tsfeatures
 
@@ -24,17 +23,24 @@ def prepare_to_train_fforma(dataset, validation_periods, seasonality):
     X_train_df, y_train_df, X_test_df, y_test_df = prepare_m4_data(dataset,
                                                                    './R/data', 100)
 
+    # There must be a good amount of time series. Otherwise FForma will fail,
+    # as lightgbm needs enough samples when there are many features.
+    dev_series = [f'W{i}' for i in range(1, 100)]  # [W1, W2, ..., W20] - More series
+    # for meaningful features
+    y_train_df = y_train_df[y_train_df['unique_id'].isin(dev_series)]
+    y_test_df = y_test_df[y_test_df['unique_id'].isin(dev_series)]
+
     # Preparing errors
     y_holdout_train_df, y_val_df = temp_holdout(y_train_df, validation_periods)
     meta_models = {
-        #'ARIMA': ARIMA(freq=seasonality, stepwise=False, approximation=False),
-        'ETS': ETS(freq=seasonality),
-        'ThetaF': ThetaF(freq=seasonality),
-        'Naive': Naive(freq=seasonality),
-        'SeasonalNaive': SeasonalNaive(freq=seasonality),
-        'Naive2': Naive2(seasonality=seasonality)
+        'ETS': AutoETS,
+        'ThetaF': OptimizedTheta,
+        'Naive': StatsForecastNaive,
+        # 'SeasonalNaive': StatsForecastSeasonalNaive,
+        # TODO: Naive2 -> SeasonalNaive(2)?
+        'Naive2': StatsForecastSeasonalNaive(season_length=2)
     }
-    validation_meta_models = MetaModels(meta_models)
+    validation_meta_models = MetaModels(meta_models, seasonality=seasonality)
     validation_meta_models.fit(y_holdout_train_df)
     prediction_validation_meta_models = validation_meta_models.predict(y_val_df)
 
@@ -44,11 +50,11 @@ def prepare_to_train_fforma(dataset, validation_periods, seasonality):
     #Calculating features
     features = tsfeatures(y_holdout_train_df, seasonality)
 
-    #Calculating actual predictins
-    meta_models = MetaModels(meta_models)
-    meta_models.fit(y_train_df)
+    #Calculating actual predictions
+    final_meta_models = MetaModels(meta_models, seasonality=seasonality)
+    final_meta_models.fit(y_train_df)
 
-    predictions = meta_models.predict(y_test_df[['unique_id', 'ds']])
+    predictions = final_meta_models.predict(y_test_df[['unique_id', 'ds']])
 
     return errors, features, predictions
 
