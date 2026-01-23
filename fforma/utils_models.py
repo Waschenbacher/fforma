@@ -3,10 +3,15 @@ import lightgbm as lgb
 import numpy as np
 
 import copy
+from packaging import version
 
 from sklearn.model_selection import ParameterGrid
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
+
+# LightGBM version compatibility
+LIGHTGBM_VERSION = version.parse(lgb.__version__)
+LIGHTGBM_4X_CUSTOM_OBJECTIVE_BROKEN = LIGHTGBM_VERSION >= version.parse("4.0.0")
 
 def _train_lightgbm(holdout_feats, best_models,
                     params, fobj, feval,
@@ -21,12 +26,22 @@ def _train_lightgbm(holdout_feats, best_models,
                                        best_models,
                                        np.arange(holdout_feats.shape[0]),
                                        random_state=seed,
-                                       stratify=best_models)
+                                       stratify=best_models
+                                       )
 
     params = copy.deepcopy(params)
     num_round = int(params.pop('n_estimators', 100))
 
     params['num_class'] = len(np.unique(best_models))
+
+    # LightGBM 4.x: Build callbacks list
+    callbacks = []
+    if early_stopping_rounds is not None and early_stopping_rounds > 0:
+        callbacks.append(lgb.early_stopping(early_stopping_rounds))
+    if verbose_eval is False:
+        callbacks.append(lgb.log_evaluation(0))  # No logging
+    elif verbose_eval is True:
+        callbacks.append(lgb.log_evaluation(1))  # Log every iteration
 
     if fobj is not None:
 
@@ -34,30 +49,58 @@ def _train_lightgbm(holdout_feats, best_models,
         dvalid = lgb.Dataset(data=holdout_feats_val, label=indices_val)
         valid_sets = [dtrain, dvalid]
 
-        gbm_model = lgb.train(
-            params=params,
-            train_set=dtrain,
-            fobj=fobj,
-            num_boost_round=num_round,
-            feval=feval,
-            valid_sets=valid_sets,
-            early_stopping_rounds=early_stopping_rounds,
-            verbose_eval=verbose_eval
-        )
+        if LIGHTGBM_VERSION >= version.parse("4.0.0"):
+            # LightGBM 4.x: Custom objective in params (has bugs)
+            params['objective'] = fobj
+            gbm_model = lgb.train(
+                params=params,
+                train_set=dtrain,
+                num_boost_round=num_round,
+                feval=feval,
+                valid_sets=valid_sets,
+                callbacks=callbacks
+            )
+        else:
+            # LightGBM 3.x: Custom objective as fobj parameter (correct approach)
+            # Do NOT put custom objective in params - causes TypeError
+            gbm_model = lgb.train(
+                params=params,
+                train_set=dtrain,
+                num_boost_round=num_round,
+                fobj=fobj,  # Custom objective as separate parameter
+                feval=feval,
+                valid_sets=valid_sets,
+                early_stopping_rounds=early_stopping_rounds,
+                verbose_eval=verbose_eval
+            )
     else:
+        # Ensure default multiclass objective when no custom objective
+        if 'objective' not in params:
+            params['objective'] = 'multiclass'
 
         dtrain = lgb.Dataset(data=holdout_feats_train, label=best_models_train)
         dvalid = lgb.Dataset(data=holdout_feats_val, label=best_models_val)
         valid_sets = [dtrain, dvalid]
 
-        gbm_model = lgb.train(
-            params=params,
-            train_set=dtrain,
-            num_boost_round=num_round,
-            valid_sets=valid_sets,
-            early_stopping_rounds=early_stopping_rounds,
-            verbose_eval=verbose_eval
-        )
+        if LIGHTGBM_VERSION >= version.parse("4.0.0"):
+            # LightGBM 4.x: Use callbacks
+            gbm_model = lgb.train(
+                params=params,
+                train_set=dtrain,
+                num_boost_round=num_round,
+                valid_sets=valid_sets,
+                callbacks=callbacks
+            )
+        else:
+            # LightGBM 3.x: Use old parameters
+            gbm_model = lgb.train(
+                params=params,
+                train_set=dtrain,
+                num_boost_round=num_round,
+                valid_sets=valid_sets,
+                early_stopping_rounds=early_stopping_rounds,
+                verbose_eval=verbose_eval
+            )
 
 
     return gbm_model
@@ -73,31 +116,73 @@ def _train_lightgbm_cv(holdout_feats, best_models,
 
     params['num_class'] = len(np.unique(best_models))
 
+    # LightGBM 4.x: Build callbacks list for CV
+    callbacks = []
+    if verbose_eval is False:
+        callbacks.append(lgb.log_evaluation(0))  # No logging
+    elif verbose_eval is True:
+        callbacks.append(lgb.log_evaluation(1))  # Log every iteration
+
     if fobj is not None:
+        print(f"🔧 Using custom objective in CV with LightGBM {LIGHTGBM_VERSION}")
+
+        # Use indices as labels for custom objective (FFORMA requirement)
         indices = np.arange(holdout_feats.shape[0])
         dtrain = lgb.Dataset(data=holdout_feats, label=indices)
 
-        gbm_model = lgb.cv(
-            params=params,
-            train_set=dtrain,
-            fobj=fobj,
-            num_boost_round=num_round,
-            feval=feval,
-            early_stopping_rounds=early_stopping_rounds,
-            verbose_eval = verbose_eval,
-            folds=folds(holdout_feats, best_models)
-        )
+        if LIGHTGBM_VERSION >= version.parse("4.0.0"):
+            # LightGBM 4.x: Custom objective in params (has bugs)
+            params['objective'] = fobj
+            gbm_model = lgb.cv(
+                params=params,
+                train_set=dtrain,
+                num_boost_round=num_round,
+                feval=feval,
+                folds=folds(holdout_feats, best_models),
+                callbacks=callbacks,
+                seed=seed
+            )
+        else:
+            # LightGBM 3.x: Custom objective as fobj parameter
+            gbm_model = lgb.cv(
+                params=params,
+                train_set=dtrain,
+                num_boost_round=num_round,
+                fobj=fobj,  # Custom objective as separate parameter
+                feval=feval,
+                folds=folds(holdout_feats, best_models),
+                early_stopping_rounds=early_stopping_rounds,
+                verbose_eval=verbose_eval,
+                seed=seed
+            )
     else:
+        # Ensure default multiclass objective when no custom objective
+        if 'objective' not in params:
+            params['objective'] = 'multiclass'
+
         dtrain = lgb.Dataset(data=holdout_feats, label=best_models)
 
-        gbm_model = lgb.cv(
-            params=params,
-            train_set=dtrain,
-            num_boost_round=num_round,
-            early_stopping_rounds=early_stopping_rounds,
-            verbose_eval=verbose_eval,
-            folds=folds(holdout_feats, best_models)
-        )
+        if LIGHTGBM_VERSION >= version.parse("4.0.0"):
+            # LightGBM 4.x: Use callbacks
+            gbm_model = lgb.cv(
+                params=params,
+                train_set=dtrain,
+                num_boost_round=num_round,
+                folds=folds(holdout_feats, best_models),
+                callbacks=callbacks,
+                seed=seed
+            )
+        else:
+            # LightGBM 3.x: Use old parameters
+            gbm_model = lgb.cv(
+                params=params,
+                train_set=dtrain,
+                num_boost_round=num_round,
+                folds=folds(holdout_feats, best_models),
+                early_stopping_rounds=early_stopping_rounds,
+                verbose_eval=verbose_eval,
+                seed=seed
+            )
 
     optimal_rounds = len(gbm_model[list(gbm_model.keys())[0]])
     best_performance = gbm_model[list(gbm_model.keys())[0]][-1]
