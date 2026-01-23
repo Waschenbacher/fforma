@@ -270,7 +270,25 @@ class MetaModels:
 
         return self
 
-    def _predict_statsforecast(self, y_hat_df: pd.DataFrame) -> List[pd.DataFrame]:
+    @staticmethod
+    def _combine_predictions(df_predictions: List[Optional[pd.DataFrame]]) -> pd.DataFrame:
+        """Combine predictions to a DF with each column being predictions of a model."""
+        # Remove None from df_predictions
+        df_predictions_clean = [df for df in df_predictions if df is not None]
+
+        if not df_predictions_clean:
+            raise ValueError("No valid predictions found (all predictions are None)")
+        if len(df_predictions_clean) == 1:
+            return df_predictions_clean[0]
+
+        # Merge all predictions on unique_id and ds
+        df_combined = df_predictions_clean[0]
+        for df in df_predictions_clean[1:]:
+            df_combined = pd.merge(df_combined, df, on=['unique_id', 'ds'], how='outer')
+        return df_combined
+
+
+    def _predict_statsforecast(self, y_hat_df: pd.DataFrame) -> Optional[pd.DataFrame]:
         """
         Generate predictions using fitted StatsForecast models.
 
@@ -281,7 +299,7 @@ class MetaModels:
 
         Returns
         -------
-        List[pd.DataFrame]
+        Optional[pd.DataFrame]
             List of prediction DataFrames for StatsForecast models, or None if no models
         """
         if hasattr(self, 'statsforecast_obj_') and self.statsforecast_obj_ is not None:
@@ -314,13 +332,14 @@ class MetaModels:
                     raise RuntimeError(f"Failed to generate predictions for {y_hat_df.shape[0]} rows")
 
                 print(f"✅ Generated predictions using fitted models for {len(self.statsforecast_model_names_)} StatsForecast models")
-                return [forecasts]
+                return forecasts
 
             except Exception as e:
                 raise RuntimeError(f"Warning: Failed to generate StatsForecast predictions from "
                    f"fitted models: {e}")
+        return None
 
-    def _predict_non_statsforecast(self, y_hat_df: pd.DataFrame) -> List[pd.DataFrame]:
+    def _predict_non_statsforecast(self, y_hat_df: pd.DataFrame) -> Optional[pd.DataFrame]:
         """
         Generate predictions using fitted non-StatsForecast models.
 
@@ -331,7 +350,7 @@ class MetaModels:
 
         Returns
         -------
-        List[pd.DataFrame]
+        Optional[pd.DataFrame]
             List of prediction DataFrames for non-StatsForecast models
         """
         predictions = []
@@ -387,8 +406,9 @@ class MetaModels:
                 if model_predictions:
                     model_df = pd.concat(model_predictions, ignore_index=True)
                     predictions.append(model_df)
-
-        return predictions
+            return self._combine_predictions(predictions)
+        else:
+            return None
 
     def predict(self, y_hat_df: pd.DataFrame) -> pd.DataFrame:
         """Generate predictions using efficient batch processing for StatsForecast models.
@@ -418,27 +438,12 @@ class MetaModels:
         if not all(col in y_hat_df.columns for col in required_cols):
             raise ValueError(f"Input DataFrame must have columns {required_cols}")
 
-        # Generate predictions using utility methods for better organization
-        all_predictions = []
-
         # Use utility methods to handle different model types
         statsforecast_predictions = self._predict_statsforecast(y_hat_df)
         other_predictions = self._predict_non_statsforecast(y_hat_df)
 
         # Combine all predictions
-        all_predictions.extend(statsforecast_predictions)
-        all_predictions.extend(other_predictions)
-
-        # Combine all model predictions
-        if not all_predictions:
-            raise ValueError("No successful predictions generated")
-
-        # Merge all predictions on unique_id and ds
-        final_df = all_predictions[0]
-        for df in all_predictions[1:]:
-            final_df = pd.merge(final_df, df, on=['unique_id', 'ds'], how='outer')
-
-        return final_df
+        return self._combine_predictions([statsforecast_predictions, other_predictions])
 
 
 ################################################################################
