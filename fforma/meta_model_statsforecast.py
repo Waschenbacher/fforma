@@ -16,6 +16,7 @@ https://robjhyndman.com/papers/ComplexSeasonality.pdf
 #!/usr/bin/env python
 # coding: utf-8
 
+from typing import Dict, List, Optional, Tuple, Union, Any, Callable
 import numpy as np
 import pandas as pd
 from copy import deepcopy
@@ -23,8 +24,28 @@ from statsforecast import StatsForecast
 # TODO: replace the utils with utilsforecast
 from esrnn_Di.esrnn_utils_evaluation import smape, mase, evaluate_panel
 
-def check_is_fitted(estimator, attributes):
-    """Check if a model is fitted."""
+def check_is_fitted(estimator: Any, attributes: Union[str, List[str], Tuple[str, ...]]) -> bool:
+    """Check if a model is fitted.
+
+    Parameters
+    ----------
+    estimator : Any
+        Model instance to check
+    attributes : Union[str, List[str], Tuple[str, ...]]
+        Attribute name(s) to check for
+
+    Returns
+    -------
+    bool
+        True if model is fitted
+
+    Raises
+    ------
+    TypeError
+        If estimator doesn't have a fit method
+    ValueError
+        If model is not fitted (missing attributes)
+    """
     if not hasattr(estimator, 'fit'):
         raise TypeError("%s is not an estimator instance." % estimator)
 
@@ -51,20 +72,20 @@ def get_freq_for_statsforecast(seasonality: int) -> str:
         raise ValueError(f"Invalid seasonality: {seasonality}")
 
 
-def create_statsforecast_column_mapping(statsforecast_models, model_names):
+def create_statsforecast_column_mapping(statsforecast_models: List[Any], model_names: List[str]) -> Dict[str, str]:
     """
     Create column mapping from StatsForecast model instances to desired names.
 
     Parameters
     ----------
-    statsforecast_models : list
+    statsforecast_models : List[Any]
         List of StatsForecast model instances
-    model_names : list
+    model_names : List[str]
         List of desired model names
 
     Returns
     -------
-    dict
+    Dict[str, str]
         Mapping from expected StatsForecast column names to desired model names
     """
     column_mapping = {}
@@ -102,13 +123,27 @@ class MetaModels:
         Default seasonality to use when instantiating models that require season_length
     """
 
-    def __init__(self, models, scheduler='processes', seasonality=7):
+    def __init__(self,
+                 models: Dict[str, Union[type, Any]],
+                 scheduler: str = 'processes',
+                 seasonality: int = 7) -> None:
         self.models = models
         self.scheduler = scheduler  # Kept for compatibility
         self.seasonality = seasonality
 
-    def _instantiate_model(self, model):
-        """Create a model instance from either a class or existing instance."""
+    def _instantiate_model(self, model: Union[type, Any]) -> Any:
+        """Create a model instance from either a class or existing instance.
+
+        Parameters
+        ----------
+        model : Union[type, Any]
+            Model class or instance
+
+        Returns
+        -------
+        Any
+            Instantiated model object
+        """
         if isinstance(model, type):
             # It's a class, instantiate it with appropriate parameters
             try:
@@ -129,17 +164,17 @@ class MetaModels:
             # It's already an instance, deepcopy it
             return deepcopy(model)
 
-    def _fit_statsforecast(self, y_panel_df, statsforecast_models, statsforecast_model_names):
+    def _fit_statsforecast(self, y_panel_df: pd.DataFrame, statsforecast_models: List[Any], statsforecast_model_names: List[str]) -> None:
         """
         Fit StatsForecast models using batch processing.
 
         Parameters
         ----------
-        y_panel_df : pandas.DataFrame
+        y_panel_df : pd.DataFrame
             Training data with columns ['unique_id', 'ds', 'y']
-        statsforecast_models : list
+        statsforecast_models : List[Any]
             List of instantiated StatsForecast model objects
-        statsforecast_model_names : list
+        statsforecast_model_names : List[str]
             List of model names corresponding to statsforecast_models
         """
         if not statsforecast_models:
@@ -167,15 +202,15 @@ class MetaModels:
         except Exception as e:
             raise RuntimeError(f"Failed to fit StatsForecast models: {e}")
 
-    def _fit_non_statsforecast(self, y_panel_df, non_statsforecast_models):
+    def _fit_non_statsforecast(self, y_panel_df: pd.DataFrame, non_statsforecast_models: Dict[str, Any]) -> None:
         """
         Fit non-StatsForecast models individually for each time series.
 
         Parameters
         ----------
-        y_panel_df : pandas.DataFrame
+        y_panel_df : pd.DataFrame
             Training data with columns ['unique_id', 'ds', 'y']
-        non_statsforecast_models : dict
+        non_statsforecast_models : Dict[str, Any]
             Dictionary of model_name -> model_instance for non-StatsForecast models
         """
         self.non_statsforecast_models_ = {}
@@ -194,13 +229,18 @@ class MetaModels:
                     raise RuntimeError(f"Warning: Failed to fit {model_name} for {unique_id}:"
                              f" {e}")
 
-    def fit(self, y_panel_df):
+    def fit(self, y_panel_df: pd.DataFrame) -> 'MetaModels':
         """Fit models using efficient batch processing for StatsForecast models.
 
         Parameters
         ----------
-        y_panel_df: pandas DataFrame
+        y_panel_df : pd.DataFrame
             DataFrame with columns ['unique_id', 'ds', 'y']
+
+        Returns
+        -------
+        MetaModels
+            Returns self for method chaining
         """
         # Validate input format
         required_cols = ['unique_id', 'ds', 'y']
@@ -230,21 +270,20 @@ class MetaModels:
 
         return self
 
-    def _predict_statsforecast(self, y_hat_df):
+    def _predict_statsforecast(self, y_hat_df: pd.DataFrame) -> List[pd.DataFrame]:
         """
         Generate predictions using fitted StatsForecast models.
 
         Parameters
         ----------
-        y_hat_df : pandas.DataFrame
+        y_hat_df : pd.DataFrame
             DataFrame with columns ['unique_id', 'ds'] specifying where to forecast
 
         Returns
         -------
-        list
-            List of prediction DataFrames for StatsForecast models
+        List[pd.DataFrame]
+            List of prediction DataFrames for StatsForecast models, or None if no models
         """
-
         if hasattr(self, 'statsforecast_obj_') and self.statsforecast_obj_ is not None:
             try:
                 # TODO: do we need h or can we use y_hat_df in .predict() directly?
@@ -281,18 +320,18 @@ class MetaModels:
                 raise RuntimeError(f"Warning: Failed to generate StatsForecast predictions from "
                    f"fitted models: {e}")
 
-    def _predict_non_statsforecast(self, y_hat_df):
+    def _predict_non_statsforecast(self, y_hat_df: pd.DataFrame) -> List[pd.DataFrame]:
         """
         Generate predictions using fitted non-StatsForecast models.
 
         Parameters
         ----------
-        y_hat_df : pandas.DataFrame
+        y_hat_df : pd.DataFrame
             DataFrame with columns ['unique_id', 'ds'] specifying where to forecast
 
         Returns
         -------
-        list
+        List[pd.DataFrame]
             List of prediction DataFrames for non-StatsForecast models
         """
         predictions = []
@@ -351,17 +390,17 @@ class MetaModels:
 
         return predictions
 
-    def predict(self, y_hat_df):
+    def predict(self, y_hat_df: pd.DataFrame) -> pd.DataFrame:
         """Generate predictions using efficient batch processing for StatsForecast models.
 
         Parameters
         ----------
-        y_hat_df: pandas DataFrame
+        y_hat_df : pd.DataFrame
             DataFrame with columns ['unique_id', 'ds'] specifying where to forecast
 
         Returns
         -------
-        predictions: pandas DataFrame
+        pd.DataFrame
             DataFrame with forecasts in wide format (one column per model)
         """
         # Check if we have fitted models
@@ -406,21 +445,20 @@ class MetaModels:
 ########## UTILS FOR FFORMA FLOW (unchanged)
 ###############################################################################
 
-def temp_holdout(y_panel_df, val_periods):
+def temp_holdout(y_panel_df: pd.DataFrame, val_periods: int) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Splits the data in train and validation sets.
 
     Parameters
     ----------
-    y_panel_df: pandas df
+    y_panel_df : pd.DataFrame
         Pandas DataFrame with columns ['unique_id', 'ds', 'y']
-    val_periods: int
+    val_periods : int
         Number of periods to hold out for validation
 
     Returns
     -------
-    Tuple
-        - train: pandas df
-        - val: pandas df
+    Tuple[pd.DataFrame, pd.DataFrame]
+        Train and validation DataFrames
     """
     val = y_panel_df.groupby('unique_id').tail(val_periods)
     train = y_panel_df.groupby('unique_id').apply(lambda df: df.head(-val_periods)).reset_index(drop=True)
@@ -428,25 +466,27 @@ def temp_holdout(y_panel_df, val_periods):
     return train, val
 
 
-def calc_errors(y_panel_df, y_insample_df, seasonality, benchmark_model='Naive2'):
+def calc_errors(y_panel_df: pd.DataFrame,
+                 y_insample_df: pd.DataFrame,
+                 seasonality: int,
+                 benchmark_model: str = 'Naive2') -> pd.DataFrame:
     """Calculates OWA of each time series using benchmark_model as benchmark.
 
     Parameters
     ----------
-    y_panel_df: pandas df
+    y_panel_df : pd.DataFrame
         Pandas DataFrame with columns ['unique_id', 'ds', 'y']
-    y_insample_df: pandas df
-        Pandas DataFrame with columns ['unique_id', 'ds', 'y']
-        Train set.
-    seasonality: int
-        Frequency of the time series.
-    benchmark_model: str
-        Column name of the benchmark model.
+    y_insample_df : pd.DataFrame
+        Pandas DataFrame with columns ['unique_id', 'ds', 'y'] (Train set)
+    seasonality : int
+        Frequency of the time series
+    benchmark_model : str, default='Naive2'
+        Column name of the benchmark model
 
     Returns
     -------
-    Pandas DataFrame
-        OWA errors for each time series and each model.
+    pd.DataFrame
+        OWA errors for each time series and each model
     """
     assert benchmark_model in y_panel_df.columns
 
@@ -478,8 +518,23 @@ def calc_errors(y_panel_df, y_insample_df, seasonality, benchmark_model='Naive2'
     return errors
 
 
-def get_prediction_panel(y_panel_df, h, freq):
-    """Construct panel to use with predict method."""
+def get_prediction_panel(y_panel_df: pd.DataFrame, h: int, freq: Optional[str]) -> pd.DataFrame:
+    """Construct panel to use with predict method.
+
+    Parameters
+    ----------
+    y_panel_df : pd.DataFrame
+        Input panel data with columns ['unique_id', 'ds', 'y']
+    h : int
+        Number of periods to forecast
+    freq : Optional[str]
+        Frequency parameter (currently unused in implementation)
+
+    Returns
+    -------
+    pd.DataFrame
+        Prediction panel with future dates for each unique_id
+    """
     df = y_panel_df[['unique_id', 'ds']].groupby('unique_id').max().reset_index()
 
     predict_panel = []

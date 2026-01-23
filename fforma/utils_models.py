@@ -1,3 +1,4 @@
+from typing import Dict, Optional, Tuple, Union, Callable, Any
 import pandas as pd
 import lightgbm as lgb
 import numpy as np
@@ -13,10 +14,14 @@ from tqdm import tqdm
 LIGHTGBM_VERSION = version.parse(lgb.__version__)
 LIGHTGBM_4X_CUSTOM_OBJECTIVE_BROKEN = LIGHTGBM_VERSION >= version.parse("4.0.0")
 
-def _train_lightgbm(holdout_feats, best_models,
-                    params, fobj, feval,
-                    early_stopping_rounds,
-                    verbose_eval, seed):
+def _train_lightgbm(holdout_feats: Union[pd.DataFrame, np.ndarray],
+                    best_models: np.ndarray,
+                    params: Dict[str, Any],
+                    fobj: Optional[Callable],
+                    feval: Optional[Callable],
+                    early_stopping_rounds: Optional[int],
+                    verbose_eval: Union[bool, int],
+                    seed: int) -> lgb.Booster:
 
     holdout_feats_train, holdout_feats_val, \
         best_models_train, \
@@ -105,11 +110,16 @@ def _train_lightgbm(holdout_feats, best_models,
 
     return gbm_model
 
-def _train_lightgbm_cv(holdout_feats, best_models,
-                       params, fobj, feval,
-                       early_stopping_rounds,
-                       verbose_eval, seed,
-                       folds, train_model=True):
+def _train_lightgbm_cv(holdout_feats: Union[pd.DataFrame, np.ndarray],
+                       best_models: np.ndarray,
+                       params: Dict[str, Any],
+                       fobj: Optional[Callable],
+                       feval: Optional[Callable],
+                       early_stopping_rounds: Optional[int],
+                       verbose_eval: Union[bool, int],
+                       seed: int,
+                       folds: Callable,
+                       train_model: bool = True) -> Union[lgb.Booster, Tuple[int, float]]:
 
     params = copy.deepcopy(params)
     num_round = int(params.pop('n_estimators', 100))
@@ -199,12 +209,17 @@ def _train_lightgbm_cv(holdout_feats, best_models,
 
     return optimal_rounds, best_performance
 
-def _train_lightgbm_grid_search(holdout_feats, best_models,
-                                use_cv, init_params,
-                                param_grid, fobj, feval,
-                                early_stopping_rounds,
-                                verbose_eval, seed,
-                                folds):
+def _train_lightgbm_grid_search(holdout_feats: Union[pd.DataFrame, np.ndarray],
+                                best_models: np.ndarray,
+                                use_cv: bool,
+                                init_params: Dict[str, Any],
+                                param_grid: Dict[str, Any],
+                                fobj: Optional[Callable],
+                                feval: Optional[Callable],
+                                early_stopping_rounds: Optional[int],
+                                verbose_eval: Union[bool, int],
+                                seed: int,
+                                folds: Callable) -> lgb.Booster:
 
     best_params = {}
     best_performance = np.inf

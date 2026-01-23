@@ -1,3 +1,4 @@
+from typing import Dict, Optional, Tuple, Union, Any
 import pandas as pd
 import numpy as np
 import multiprocessing as mp
@@ -14,13 +15,17 @@ from fforma.utils_models import _train_lightgbm, _train_lightgbm_cv, _train_ligh
 
 class FFORMA:
 
-    def __init__(self, objective='FFORMA', verbose_eval=True,
-                 early_stopping_rounds=10,
-                 params=None,
-                 param_grid=None,
-                 use_cv=False, nfolds=5,
-                 greedy_search=False,
-                 threads=None, seed=260294):
+    def __init__(self,
+                 objective: str = 'FFORMA',
+                 verbose_eval: Union[bool, int] = True,
+                 early_stopping_rounds: int = 10,
+                 params: Optional[Dict[str, Any]] = None,
+                 param_grid: Optional[Dict[str, Any]] = None,
+                 use_cv: bool = False,
+                 nfolds: int = 5,
+                 greedy_search: bool = False,
+                 threads: Optional[int] = None,
+                 seed: int = 260294) -> None:
         """ Feature-based Forecast Model Averaging.
 
         Python Implementation of FFORMA.
@@ -80,7 +85,26 @@ class FFORMA:
                                                                              seed)
         self._fitted = False
 
-    def _tsfeatures(self, y_train_df, y_val_df, freq):
+    def _tsfeatures(self,
+                    y_train_df: Union[pd.DataFrame, pd.Series],
+                    y_val_df: Union[pd.DataFrame, pd.Series],
+                    freq: Optional[Union[str, int]]) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """Extract time series features using tsfeatures library.
+
+        Parameters
+        ----------
+        y_train_df : Union[pd.DataFrame, pd.Series]
+            Training data
+        y_val_df : Union[pd.DataFrame, pd.Series]
+            Validation data
+        freq : Optional[Union[str, int]]
+            Frequency of the time series
+
+        Returns
+        -------
+        Tuple[pd.DataFrame, pd.DataFrame]
+            Complete features, holdout features
+        """
         #TODO receive panel of freq
         complete_data = pd.concat([y_train_df, y_val_df.filter(items=['unique_id', 'ds', 'y'])])
         holdout_feats = tsfeatures(y_train_df)
@@ -89,7 +113,7 @@ class FFORMA:
         return feats, holdout_feats
 
     # Objective function for lgb
-    def fforma_objective(self, predt: np.ndarray, dtrain) -> (np.ndarray, np.ndarray):
+    def fforma_objective(self, predt: np.ndarray, dtrain: Any) -> Tuple[np.ndarray, np.ndarray]:
         '''
         Compute...
         '''
@@ -107,10 +131,22 @@ class FFORMA:
         #hess = grad*(1 - 2*preds_transformed)
         return grad.flatten('F'), hess.flatten('F')
 
-    def fforma_loss(self, predt: np.ndarray, dtrain) -> (str, float):
-        '''
-        Compute...
-        '''
+    def fforma_loss(self, predt: np.ndarray, dtrain: Any) -> Tuple[str, float, bool]:
+        """
+        Compute FFORMA loss for LightGBM evaluation.
+
+        Parameters
+        ----------
+        predt : np.ndarray
+            Predicted values
+        dtrain : Any
+            LightGBM training dataset
+
+        Returns
+        -------
+        Tuple[str, float, bool]
+            Evaluation name, loss value, is_higher_better flag
+        """
         y = dtrain.get_label().astype(int)
         n_train = len(y)
         #for lightgbm
@@ -124,11 +160,17 @@ class FFORMA:
 
         return 'FFORMA-loss', fforma_loss, False
 
-    def fit(self, y_train_df=None, y_val_df=None,
-            val_periods=None,
-            errors=None, holdout_feats=None,
-            feats=None, freq=None, base_model=None,
-            sorted_data=False, weights=None):
+    def fit(self,
+            y_train_df: Optional[Union[pd.DataFrame, pd.Series]] = None,
+            y_val_df: Optional[Union[pd.DataFrame, pd.Series]] = None,
+            val_periods: Optional[Union[int, pd.DataFrame]] = None,
+            errors: Optional[pd.DataFrame] = None,
+            holdout_feats: Optional[pd.DataFrame] = None,
+            feats: Optional[pd.DataFrame] = None,
+            freq: Optional[Union[str, int]] = None,
+            base_model: Optional[Any] = None,
+            sorted_data: bool = False,
+            weights: Optional[Union[pd.DataFrame, np.ndarray]] = None) -> None:
         """
         y_train_df: pandas df
             panel with columns unique_id, ds, y
@@ -232,12 +274,21 @@ class FFORMA:
         self._fitted = True
 
 
-    def predict(self, y_hat_df, fforms=False):
+    def predict(self, y_hat_df: Union[pd.DataFrame, pd.Series], fforms: bool = False) -> pd.DataFrame:
         """
+        Generate FFORMA predictions.
+
         Parameters
         ----------
-        y_hat_df: pandas df
-            panel with columns unique_id, ds, {model} for each model to ensemble
+        y_hat_df : Union[pd.DataFrame, pd.Series]
+            Panel with columns unique_id, ds, {model} for each model to ensemble
+        fforms : bool, default=False
+            Whether to use FFORMS (binary weights) instead of FFORMA (weighted average)
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with original predictions plus FFORMA/FFORMS predictions
         """
         assert self._fitted, "Model not fitted yet"
 
