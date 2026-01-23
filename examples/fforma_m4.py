@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 # coding: utf-8
 import pandas as pd
-import numpy as np
 
 from fforma import FFORMA
 from fforma.r_models import (
-    ARIMA,
     ETS,
     ThetaF,
     Naive,
@@ -15,7 +13,6 @@ from fforma.meta_model import (
     MetaModels,
     temp_holdout,
     calc_errors,
-    get_prediction_panel
 )
 from esrnn_Di.esrnn_utils_evaluation import Naive2
 from esrnn_Di.esrnn_m4_data import prepare_m4_data, seas_dict
@@ -24,7 +21,8 @@ from tsfeatures import tsfeatures
 
 def prepare_to_train_fforma(dataset, validation_periods, seasonality):
 
-    X_train_df, y_train_df, X_test_df, y_test_df = prepare_m4_data(dataset, './data', 100)
+    X_train_df, y_train_df, X_test_df, y_test_df = prepare_m4_data(dataset,
+                                                                   './R/data', 100)
 
     # Preparing errors
     y_holdout_train_df, y_val_df = temp_holdout(y_train_df, validation_periods)
@@ -37,7 +35,7 @@ def prepare_to_train_fforma(dataset, validation_periods, seasonality):
         'Naive2': Naive2(seasonality=seasonality)
     }
     validation_meta_models = MetaModels(meta_models)
-    validation_meta_models.fit(train)
+    validation_meta_models.fit(y_holdout_train_df)
     prediction_validation_meta_models = validation_meta_models.predict(y_val_df)
 
     #Calculating errors
@@ -50,7 +48,7 @@ def prepare_to_train_fforma(dataset, validation_periods, seasonality):
     meta_models = MetaModels(meta_models)
     meta_models.fit(y_train_df)
 
-    predictions = meta_models.predict(y_test_df[['unique_id', 'ds']]))
+    predictions = meta_models.predict(y_test_df[['unique_id', 'ds']])
 
     return errors, features, predictions
 
@@ -85,6 +83,7 @@ def main():
                feats=complete_features)
 
     fforma_predictions = fforma.predict(complete_predictions)
+    print(fforma_predictions)
 
     #evaluate predictions
 
