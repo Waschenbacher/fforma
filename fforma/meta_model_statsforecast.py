@@ -21,7 +21,8 @@ import numpy as np
 import pandas as pd
 from copy import deepcopy
 from statsforecast import StatsForecast
-# TODO: replace the utils with utilsforecast
+# TODO: replace the utils with utilsforecast for smape and mase, dataforecast for
+#  evaluate_panel
 from esrnn_Di.esrnn_utils_evaluation import smape, mase, evaluate_panel
 
 def check_is_fitted(estimator: Any, attributes: Union[str, List[str], Tuple[str, ...]]) -> bool:
