@@ -37,7 +37,8 @@ def prepare_to_train_fforma(dataset, validation_periods, seasonality):
         'ThetaF': OptimizedTheta,
         'Naive': StatsForecastNaive,
         # 'SeasonalNaive': StatsForecastSeasonalNaive,
-        # TODO: Naive2 -> SeasonalNaive(2)?
+        # TODO: Replace SeasonalNaive(2) with Naive2 from esrnn_utils_evaluation.py.
+        #  After this, uncomment 'SeasonalNaive' above.
         'Naive2': StatsForecastSeasonalNaive(season_length=2)
     }
     validation_meta_models = MetaModels(meta_models, seasonality=seasonality)

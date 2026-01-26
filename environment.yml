@@ -38,4 +38,4 @@ dependencies:
     - rstl
     - stldecompose
     # Git-based dependencies that need to be installed via pip
-    - git+https://github.com/FedericoGarza/tsfeatures
+    - git+https://github.com/FedericoGarza/tsfeatures # TODO: replace it with nixtla/tsfeatures

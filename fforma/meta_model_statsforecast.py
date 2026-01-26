@@ -56,7 +56,8 @@ def check_is_fitted(estimator: Any, attributes: Union[str, List[str], Tuple[str,
         raise ValueError(f"This {type(estimator).__name__} instance is not fitted yet.")
 
     return True
-
+# TODO: use infer_frey based on df_y_panel['ds'] to infer the frequency. Write an
+#  additional util to convert frequency from pandas to statsforecast.
 def get_freq_for_statsforecast(seasonality: int) -> str:
     if seasonality == 24:
         return "H"
