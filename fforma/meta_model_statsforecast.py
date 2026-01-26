@@ -303,7 +303,7 @@ class MetaModels:
         Optional[pd.DataFrame]
             List of prediction DataFrames for StatsForecast models, or None if no models
         """
-        if hasattr(self, 'statsforecast_obj_') and self.statsforecast_obj_ is not None:
+        if hasattr(self, 'statsforecast_obj_') and self.statsforecast_obj_:
             try:
                 # TODO: do we need h or can we use y_hat_df in .predict() directly?
                 # Calculate forecast horizon for each time series
@@ -356,7 +356,7 @@ class MetaModels:
         """
         predictions = []
 
-        if hasattr(self, 'non_statsforecast_models_'):
+        if hasattr(self, 'non_statsforecast_models_') and self.non_statsforecast_models_:
             for model_name, fitted_models_dict in self.non_statsforecast_models_.items():
                 model_predictions = []
 
