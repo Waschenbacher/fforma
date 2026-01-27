@@ -21,9 +21,7 @@ import numpy as np
 import pandas as pd
 from copy import deepcopy
 from statsforecast import StatsForecast
-# TODO: replace the utils with utilsforecast for smape and mase, dataforecast for
-#  evaluate_panel
-from esrnn_Di.esrnn_utils_evaluation import smape, mase, evaluate_panel
+from utilsforecast.losses import smape, mase
 
 def check_is_fitted(estimator: Any, attributes: Union[str, List[str], Tuple[str, ...]]) -> bool:
     """Check if a model is fitted.
@@ -497,21 +495,13 @@ def calc_errors(y_panel_df: pd.DataFrame,
     """
     assert benchmark_model in y_panel_df.columns
 
-    y_panel = y_panel_df[['unique_id', 'ds', 'y']]
-    y_hat_panel_fun = lambda model_name: y_panel_df[['unique_id', 'ds', model_name]].rename(columns={model_name: 'y_hat'})
+    key_columns = ['unique_id', 'ds', 'y']
 
-    model_names = set(y_panel_df.columns) - set(y_panel.columns)
-
-    errors_smape = y_panel[['unique_id']].drop_duplicates().reset_index(drop=True)
-    errors_mase = errors_smape.copy()
-
-    for model_name in model_names:
-        errors_smape[model_name] = None
-        errors_mase[model_name] = None
-        y_hat_panel = y_hat_panel_fun(model_name)
-
-        errors_smape[model_name] = evaluate_panel(y_panel, y_hat_panel, smape)
-        errors_mase[model_name] = evaluate_panel(y_panel, y_hat_panel, mase, y_insample_df, seasonality)
+    # Remove all key_columns from y_panel_df.columns.
+    model_names = list(set(y_panel_df.columns) - set(key_columns))
+    errors_smape = smape(y_panel_df, models=model_names)
+    errors_mase = mase(y_panel_df, models=model_names, seasonality=seasonality,
+                       train_df=y_insample_df)
 
     mean_smape_benchmark = errors_smape[benchmark_model].mean()
     mean_mase_benchmark = errors_mase[benchmark_model].mean()

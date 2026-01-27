@@ -3,16 +3,10 @@
 
 import numpy as np
 import pandas as pd
-
 import dask
-
-from collections import ChainMap
-from functools import partial
 from itertools import product
 from copy import deepcopy
-
 from sklearn.utils.validation import check_is_fitted
-from esrnn_Di.esrnn_utils_evaluation import smape, mase, evaluate_panel
 
 
 class MetaModels:
@@ -131,58 +125,6 @@ def temp_holdout(y_panel_df, val_periods):
     train = y_panel_df.groupby('unique_id').apply(lambda df: df.head(-val_periods)).reset_index(drop=True)
 
     return train, val
-
-def calc_errors(y_panel_df, y_insample_df, seasonality, benchmark_model='Naive2'):
-    """Calculates OWA of each time series
-    usign benchmark_model as benchmark.
-
-    Parameters
-    ----------
-    y_panel_df: pandas df
-        Pandas DataFrame with columns ['unique_id', 'ds', 'y']
-    y_insample_df: pandas df
-        Pandas DataFrame with columns ['unique_id', 'ds', 'y']
-        Train set.
-    seasonality: int
-        Frequency of the time seires.
-    benchmark_model: str
-        Column name of the benchmark model.
-
-    Returns
-    -------
-    Pandas DataFrame
-        OWA errors for each time series and each model.
-    """
-
-    assert benchmark_model in y_panel_df.columns
-
-    y_panel = y_panel_df[['unique_id', 'ds', 'y']]
-    y_hat_panel_fun = lambda model_name: y_panel_df[['unique_id', 'ds', model_name]].rename(columns={model_name: 'y_hat'})
-
-    model_names = set(y_panel_df.columns) - set(y_panel.columns)
-
-    errors_smape = y_panel[['unique_id']].drop_duplicates().reset_index(drop=True)
-    errors_mase = errors_smape.copy()
-
-    for model_name in model_names:
-        errors_smape[model_name] = None
-        errors_mase[model_name] = None
-        y_hat_panel = y_hat_panel_fun(model_name)
-
-        errors_smape[model_name] = evaluate_panel(y_panel, y_hat_panel, smape)
-        errors_mase[model_name] = evaluate_panel(y_panel, y_hat_panel, mase, y_insample_df, seasonality)
-
-    mean_smape_benchmark = errors_smape[benchmark_model].mean()
-    mean_mase_benchmark = errors_mase[benchmark_model].mean()
-
-    errors_smape = errors_smape.drop(columns=benchmark_model).set_index('unique_id')
-    errors_mase = errors_mase.drop(columns=benchmark_model).set_index('unique_id')
-
-    errors = errors_smape/mean_mase_benchmark + errors_mase/mean_smape_benchmark
-    errors = 0.5*errors
-    errors = errors
-
-    return errors
 
 def get_prediction_panel(y_panel_df, h, freq):
     """Construct panel to use with
