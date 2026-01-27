@@ -27,4 +27,5 @@ supersmoother==0.4
 threadpoolctl==2.1.0
 tqdm==4.46.0
 rpy2==3.3.3
+utilsforecast
 git+https://github.com/FedericoGarza/tsfeatures  # TODO: replace it with nixtla/tsfeatures
